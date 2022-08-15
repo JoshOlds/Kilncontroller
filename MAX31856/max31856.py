@@ -8,9 +8,8 @@ import spidev
 
 
 class Max31856:
-    def __init__(self, spi: spidev, debug=False):
+    def __init__(self, spi: spidev):
         self.spi = spi
-        self.debug = debug
 
         # Configuration Register 1 Parameters
         self.config1_conversion_mode = 1  # 0 = off, 1 = auto conversion every 100ms
@@ -20,7 +19,7 @@ class Max31856:
         self.config1_fault_mode = 0  # 0 = fault bits high only when fault active, 1 = latched faults
         self.config1_hz_filter_mode = 0  # 0 = 60hz, 1 = 50hz
 
-        # Set the thermocouple mode defaults and
+        # Set the thermocouple mode defaults and configuration register defaults
         self.set_thermocouple_mode("K", 16)
         self.write_config_reg_1()
 
@@ -49,8 +48,6 @@ class Max31856:
             print("MAX31856 Error: Byte Address out of range.")
             return
         data_bytes = [0x80 + address, data]
-        print("Data to write: ")
-        print(data_bytes)
         self.spi.xfer2(data_bytes)
 
     def read_data(self, address, number_of_bytes):
@@ -64,16 +61,16 @@ class Max31856:
             print("MAX31856 Error: Byte Address out of range.")
             return
         address_bytes = [0x00 + address]
+
+        # Pad the data to send to ensure we clock in enough bytes
         for x in range(0, number_of_bytes):
             address_bytes.append(0x00)
 
-        print("Address Bytes: " + str(address_bytes))
-
+        # Simultaneously send and receive bytes
         received_bytes = self.spi.xfer2(address_bytes)
 
+        # The first byte received will be empty since we are sending an address during the first byte. Discard
         received_bytes = received_bytes[1:]
-        if self.debug:
-            print(received_bytes)
 
         return received_bytes
 
@@ -83,6 +80,7 @@ class Max31856:
         """
         config_data = 0x00
 
+        # Bit mapping of Config Register - see datasheet for details
         if self.config1_conversion_mode:
             config_data = config_data | 0x80
         if self.config1_oneshot:
@@ -100,9 +98,7 @@ class Max31856:
         if self.config1_hz_filter_mode:
             config_data = config_data | 0x01
 
-        # Write the config register
-        print("Config Data: ")
-        print(config_data)
+        # Write to the config register
         self.write_data(0x00, config_data)
 
     def set_thermocouple_mode(self, thermocouple_type_string: str, averaging_samples: int):
@@ -134,6 +130,7 @@ class Max31856:
             print("MAX31856 Error: Invalid thermocouple type.")
             return
 
+        # MAX31856 only support powers of 2 for sampling
         if averaging_samples == 1:
             data_byte = data_byte | 0x00
         elif averaging_samples == 2:
@@ -155,27 +152,49 @@ class Max31856:
         Reads the cold junction temperature in Degrees Celsius
         :return: Degrees C
         """
+        # data is packed in two 8-byte registers and custom bit mapped to exponents
+        # receive the two bytes
         recv_data = self.read_data(0x0A, 1)
         temp_msb = recv_data[0]
         recv_data = self.read_data(0x0B, 1)
         temp_lsb = recv_data[0]
-        print("MSB: " + str(temp_msb) + " LSB: " + str(temp_lsb))
+
+        # Bitwise conversion math
+        # sign is in the first bit
         sign = 1
         if temp_msb & 0x80:
             sign = -1
 
-        conv_temp = ((temp_msb & 0x40 >> 6) * pow(2, 6)) + ((temp_msb & 0x20 >> 5) * pow(2, 5)) + (
-                (temp_msb & 0x10 >> 4) * pow(2, 4)) + ((temp_msb & 0x08 >> 3) * pow(2, 3)) + (
-                            (temp_msb & 0x04 >> 2) * pow(2, 2)) + ((temp_msb & 0x02 >> 1) * pow(2, 1)) + (
-                            (temp_msb & 0x01) * pow(2, 0)) + ((temp_lsb & 0x80 >> 7) * pow(2, -1)) + (
-                            (temp_lsb & 0x40 >> 6) * pow(2, -2)) + ((temp_lsb & 0x20 >> 5) * pow(2, -3)) + (
-                            (temp_lsb & 0x10 >> 4) * pow(2, -4)) + ((temp_lsb & 0x08 >> 3) * pow(2, -5)) + (
-                            (temp_lsb & 0x04 >> 2) * pow(2, -6))
+        conv_temp = 0
+        if temp_msb & 0x40:
+            conv_temp = conv_temp + pow(2, 6)
+        if temp_msb & 0x20:
+            conv_temp = conv_temp + pow(2, 5)
+        if temp_msb & 0x10:
+            conv_temp = conv_temp + pow(2, 4)
+        if temp_msb & 0x08:
+            conv_temp = conv_temp + pow(2, 3)
+        if temp_msb & 0x04:
+            conv_temp = conv_temp + pow(2, 2)
+        if temp_msb & 0x02:
+            conv_temp = conv_temp + pow(2, 1)
+        if temp_msb & 0x01:
+            conv_temp = conv_temp + pow(2, 0)
+        if temp_lsb & 0x80:
+            conv_temp = conv_temp + pow(2, -1)
+        if temp_lsb & 0x40:
+            conv_temp = conv_temp + pow(2, -2)
+        if temp_lsb & 0x20:
+            conv_temp = conv_temp + pow(2, -3)
+        if temp_lsb & 0x10:
+            conv_temp = conv_temp + pow(2, -4)
+        if temp_lsb & 0x08:
+            conv_temp = conv_temp + pow(2, -5)
+        if temp_lsb & 0x04:
+            conv_temp = conv_temp + pow(2, -6)
+        conv_temp = conv_temp * sign
 
         self.cold_junction_temperature = conv_temp
-        conv_temp = conv_temp * sign
-        if self.debug:
-            print("Cold Junc Temp: " + str(conv_temp))
 
         return conv_temp
 
@@ -184,30 +203,61 @@ class Max31856:
         Reads the linearized thermocouple temperature in Degrees Celsius
         :return: Degrees Celsius
         """
+        # Temp is packed in three 8-byte registers
+        # Read the three bytes
         recv_data = self.read_data(0x0C, 1)
         temp_2 = recv_data[0]
         recv_data = self.read_data(0x0D, 1)
         temp_1 = recv_data[0]
         recv_data = self.read_data(0x0E, 1)
         temp_0 = recv_data[0]
+
+        # Bitwise conversion math
+        # sign is in first bit
         sign = 1
         if temp_2 & 0x80:
             sign = -1
 
-        conv_temp = ((temp_2 & 0x40) * pow(2, 10)) + ((temp_2 & 0x20) * pow(2, 9)) + (
-                (temp_2 & 0x10) * pow(2, 8)) + ((temp_2 & 0x08) * pow(2, 7)) + (
-                            (temp_2 & 0x04) * pow(2, 6)) + ((temp_2 & 0x01) * pow(2, 5)) + (
-                            (temp_2 & 0x01) * pow(2, 4)) + ((temp_1 & 0x80) * pow(2, 3)) + (
-                            (temp_1 & 0x40) * pow(2, 2)) + ((temp_1 & 0x20) * pow(2, 1)) + (
-                            (temp_1 & 0x10) * pow(2, 0)) + ((temp_1 & 0x08) * pow(2, -1)) + (
-                            (temp_1 & 0x04) * pow(2, -2)) + ((temp_1 & 0x02) * pow(2, -3)) + (
-                            (temp_1 & 0x01) * pow(2, -4)) + ((temp_0 & 0x80) * pow(2, -5)) + (
-                            (temp_0 & 0x40) * pow(2, -6)) + ((temp_0 & 0x20) * pow(2, -7))
+        conv_temp = 0
+        if temp_2 & 0x40:
+            conv_temp = conv_temp + pow(2, 10)
+        if temp_2 & 0x20:
+            conv_temp = conv_temp + pow(2, 9)
+        if temp_2 & 0x10:
+            conv_temp = conv_temp + pow(2, 8)
+        if temp_2 & 0x08:
+            conv_temp = conv_temp + pow(2, 7)
+        if temp_2 & 0x04:
+            conv_temp = conv_temp + pow(2, 6)
+        if temp_2 & 0x02:
+            conv_temp = conv_temp + pow(2, 5)
+        if temp_2 & 0x01:
+            conv_temp = conv_temp + pow(2, 4)
+        if temp_1 & 0x80:
+            conv_temp = conv_temp + pow(2, 3)
+        if temp_1 & 0x40:
+            conv_temp = conv_temp + pow(2, 2)
+        if temp_1 & 0x20:
+            conv_temp = conv_temp + pow(2, 1)
+        if temp_1 & 0x10:
+            conv_temp = conv_temp + pow(2, 0)
+        if temp_1 & 0x08:
+            conv_temp = conv_temp + pow(2, -1)
+        if temp_1 & 0x04:
+            conv_temp = conv_temp + pow(2, -2)
+        if temp_1 & 0x02:
+            conv_temp = conv_temp + pow(2, -3)
+        if temp_1 & 0x01:
+            conv_temp = conv_temp + pow(2, -4)
+        if temp_0 & 0x80:
+            conv_temp = conv_temp + pow(2, -6)
+        if temp_0 & 0x40:
+            conv_temp = conv_temp + pow(2, -6)
+        if temp_0 & 0x20:
+            conv_temp = conv_temp + pow(2, -7)
+        conv_temp = conv_temp * sign
 
         self.thermocouple_temperature = conv_temp
-        conv_temp = conv_temp * sign
-        if self.debug:
-            print("Thermocouple Temp: " + str(conv_temp))
 
         return conv_temp
 
@@ -218,6 +268,7 @@ class Max31856:
         recv_data = self.read_data(0x0F, 1)
         faults = recv_data[0]
 
+        # Faults are bit mapped. See datasheet for description of faults
         self.fault_cold_junc_out_of_range = faults & 0x80
         self.fault_thermocouple_out_of_range = faults & 0x40
         self.fault_cold_junc_high = faults & 0x20
@@ -229,7 +280,7 @@ class Max31856:
 
     def has_fault(self):
         """
-        Returns true if any fault is set
+        :return: True if any fault is set
         """
         if self.fault_cold_junc_out_of_range:
             return True
@@ -250,6 +301,9 @@ class Max31856:
         return False
 
     def print_faults(self):
+        """
+        Prints faults in a human-readable format.
+        """
         print("MAX31856 Faults: ")
         if self.fault_cold_junc_out_of_range:
             print("MAX31856 Fault: Cold Junction out of range")

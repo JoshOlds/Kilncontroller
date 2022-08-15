@@ -2,12 +2,13 @@ import max31856
 import spidev
 import threading
 import time
+import signal
+from datetime import datetime
 
 
 class Controller:
 
-    def __init__(self, bus_number, device_id, sleep_time, debug=False):
-        self.debug = debug
+    def __init__(self, bus_number, device_id, sleep_time):
 
         # Enable SPI
         spi = spidev.SpiDev()
@@ -16,11 +17,11 @@ class Controller:
         spi.open(bus_number, device_id)
 
         # Set SPI speed and mode
-        spi.max_speed_hz = 28800
+        spi.max_speed_hz = 4000000
         spi.mode = 0b01
         spi.lsbfirst = False
 
-        self.max31856 = max31856.Max31856(spi, debug=self.debug)
+        self.max31856 = max31856.Max31856(spi)
 
         self.spi_thread = None
         self._spi_thread_flag = False
@@ -46,12 +47,10 @@ class Controller:
         self.spi_thread_running = True
         while self._spi_thread_flag:
 
-            if self.debug:
-                print("Reading CONFIG Register: ")
-                self.max31856.read_data(0x00, 1)
-                print("Reading THERMOCOUPLE Register: ")
-                self.max31856.read_data(0x01, 1)
-                print("SPI Thread Looping...")
+            # Print the timestamp
+            now = datetime.now()
+            current_time = now.strftime("%H:%M:%S")
+            print("\nCurrent Time =", current_time)
 
             # Read the cold junction temperature
             cold_junc_temp = self.max31856.read_cold_junction_temperature()
@@ -75,14 +74,21 @@ class Controller:
 
     def stop_spi_thread(self):
         self._spi_thread_flag = False
+        # wait for thread to shutdown
+        while self.spi_thread_running:
+            time.sleep(0.1)
 
 
 def print_thermo_temp(val):
-    print("Thermocouple Temp: " + str(val))
+    temp_c = str(round(val, 1))
+    temp_f = str(round(((val * 1.8) + 32), 1))
+    print("Thermocouple Temp:  " + temp_c + "C,  " + temp_f + "F")
 
 
 def print_cold_junc_temp(val):
-    print("Cold Junction Temp: " + str(val))
+    temp_c = str(round(val, 1))
+    temp_f = str(round(((val * 1.8) + 32), 1))
+    print("Cold Junction Temp:  " + temp_c + "C,  " + temp_f + "F")
 
 
 def fault_callback(controller: Controller):
@@ -93,7 +99,7 @@ if __name__ == "__main__":
     print("Running MAX31856 Controller main...")
 
     # Create controller, bus 0, device 0, ~1 second poll rate
-    cont = Controller(0, 0, 1, debug=True)
+    cont = Controller(0, 0, 1)
 
     # Set callback functions for temperature and fault updates
     cont.thermocouple_temp_callback = print_thermo_temp
@@ -101,14 +107,8 @@ if __name__ == "__main__":
     cont.fault_callback = fault_callback
 
     # Run SPI thread
-    #cont.start_spi_thread()
+    cont.start_spi_thread()
 
-    while True:
-        for x in range(0, 16):
-            cont.max31856.read_data(x, 20)
-        time.sleep(1)
-        print("\n")
-
-
+    time.sleep(999999)
 
     cont.stop_spi_thread()
