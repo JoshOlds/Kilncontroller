@@ -1,5 +1,5 @@
-# Driver for MAX31856 - Utilizes spidev for communication
-# For details on the MAX31856 SPI protocol, see the datasheet:
+# Driver for max31856_driver - Utilizes spidev for communication
+# For details on the max31856_driver SPI protocol, see the datasheet:
 # https://cdn-learn.adafruit.com/assets/assets/000/035/948/original/MAX31856.pdf
 
 # Functionality that is currently unimplemented:
@@ -39,26 +39,26 @@ class Max31856:
 
     def write_data(self, address, data):
         """
-        Writes bytes to the specified address of the MAX31856
+        Writes bytes to the specified address of the max31856_driver
         :param address: Address to write to. See datasheet for spec
         :param data: The data bytes to write
         """
         # sanity check address size
         if address > 0x7F:
-            print("MAX31856 Error: Byte Address out of range.")
+            print("max31856_driver Error: Byte Address out of range.")
             return
         data_bytes = [0x80 + address, data]
         self.spi.xfer2(data_bytes)
 
     def read_data(self, address, number_of_bytes):
         """
-        Reads bytes from the specified address of the MAX31856
+        Reads bytes from the specified address of the max31856_driver
         :param address: Address to read from. See datasheet for spec
         :param number_of_bytes: Number of bytes to read from the address.
         """
         # sanity check address size
         if address > 0x7F:
-            print("MAX31856 Error: Byte Address out of range.")
+            print("max31856_driver Error: Byte Address out of range.")
             return
         address_bytes = [0x00 + address]
 
@@ -127,10 +127,10 @@ class Max31856:
         elif thermocouple_type_string == "T":
             data_byte = data_byte | 0x07
         else:
-            print("MAX31856 Error: Invalid thermocouple type.")
+            print("max31856_driver Error: Invalid thermocouple type.")
             return
 
-        # MAX31856 only support powers of 2 for sampling
+        # max31856_driver only support powers of 2 for sampling
         if averaging_samples == 1:
             data_byte = data_byte | 0x00
         elif averaging_samples == 2:
@@ -142,7 +142,7 @@ class Max31856:
         elif averaging_samples == 16:
             data_byte = data_byte | 0x40
         else:
-            print("MAX31856 Error: Invalid sample averaging value.")
+            print("max31856_driver Error: Invalid sample averaging value.")
             return
 
         self.write_data(0x01, data_byte)
@@ -304,20 +304,20 @@ class Max31856:
         """
         Prints faults in a human-readable format.
         """
-        print("MAX31856 Faults: ")
+        print("max31856_driver Faults: ")
         if self.fault_cold_junc_out_of_range:
-            print("MAX31856 Fault: Cold Junction out of range")
+            print("max31856_driver Fault: Cold Junction out of range")
         if self.fault_thermocouple_out_of_range:
-            print("MAX31856 Fault: Thermocouple temp out of range")
+            print("max31856_driver Fault: Thermocouple temp out of range")
         if self.fault_cold_junc_high:
-            print("MAX31856 Fault: Cold Junction temperature high")
+            print("max31856_driver Fault: Cold Junction temperature high")
         if self.fault_cold_junc_low:
-            print("MAX31856 Fault: Cold Junction temperature low")
+            print("max31856_driver Fault: Cold Junction temperature low")
         if self.fault_thermocouple_high:
-            print("MAX31856 Fault: Thermocouple temperature high")
+            print("max31856_driver Fault: Thermocouple temperature high")
         if self.fault_thermocouple_low:
-            print("MAX31856 Fault: Thermocouple temperature low")
+            print("max31856_driver Fault: Thermocouple temperature low")
         if self.fault_voltage_out_of_range:
-            print("MAX31856 Fault: Thermocouple voltage out of range")
+            print("max31856_driver Fault: Thermocouple voltage out of range")
         if self.fault_open_circuit_thermocouple:
-            print("MAX31856 Fault: Thermocouple Open Circuit Detected")
+            print("max31856_driver Fault: Thermocouple Open Circuit Detected")

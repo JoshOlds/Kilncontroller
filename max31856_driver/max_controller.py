@@ -1,14 +1,14 @@
-import max31856
+from max31856_driver import max31856
 import spidev
 import threading
 import time
-import signal
 from datetime import datetime
 
 
-class Controller:
+class MAXController:
 
-    def __init__(self, bus_number, device_id, sleep_time):
+    def __init__(self, kiln, bus_number, device_id, sleep_time):
+        self.kiln = kiln
 
         # Enable SPI
         spi = spidev.SpiDev()
@@ -34,7 +34,7 @@ class Controller:
 
     def start_spi_thread(self):
         if not self._spi_thread_flag:
-            print("Starting SPI Thread...")
+            # print("Starting SPI Thread...")
             self._spi_thread_flag = True
             self.spi_thread = threading.Thread(group=None, target=self._run, name="max31856_spi_thread")
             self.spi_thread.start()
@@ -47,20 +47,19 @@ class Controller:
         self.spi_thread_running = True
         while self._spi_thread_flag:
 
-            # Print the timestamp
-            now = datetime.now()
-            current_time = now.strftime("%H:%M:%S")
-            print("\nCurrent Time =", current_time)
-
             # Read the cold junction temperature
             cold_junc_temp = self.max31856.read_cold_junction_temperature()
             if self.cold_junction_temp_callback is not None:
                 self.cold_junction_temp_callback(cold_junc_temp)
+            if self.kiln is not None:
+                self.kiln.set_cold_junc_temp_c(cold_junc_temp)
 
             # Read the thermocouple temperature
             thermocouple_temp = self.max31856.read_thermocouple_temperature()
             if self.thermocouple_temp_callback is not None:
                 self.thermocouple_temp_callback(thermocouple_temp)
+            if self.kiln is not None:
+                self.kiln.set_thermocouple_temp_c(thermocouple_temp)
 
             # Update any fault statuses
             self.max31856.read_faults()
@@ -91,15 +90,15 @@ def print_cold_junc_temp(val):
     print("Cold Junction Temp:  " + temp_c + "C,  " + temp_f + "F")
 
 
-def fault_callback(controller: Controller):
+def fault_callback(controller: MAXController):
     controller.max31856.print_faults()
 
 
 if __name__ == "__main__":
-    print("Running MAX31856 Controller main...")
+    print("Running max31856_driver Controller main...")
 
     # Create controller, bus 0, device 0, ~1 second poll rate
-    cont = Controller(0, 0, 1)
+    cont = MAXController(None, 0, 0, 1)
 
     # Set callback functions for temperature and fault updates
     cont.thermocouple_temp_callback = print_thermo_temp
