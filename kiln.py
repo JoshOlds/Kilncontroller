@@ -1,7 +1,7 @@
 import time
 import curses
 from datetime import datetime
-import os
+import csv
 from max31856_driver import max_controller
 from scheduler import Scheduler, ScheduleRamp, ScheduleHold
 from pi_controller import PIController
@@ -29,7 +29,7 @@ class Kiln:
         self.scheduler.schedule.append(ScheduleRamp(400, 1950))
 
         # PI Controller Values
-        self.pi_controller = PIController(self, 0.3, 0.01, 1)
+        self.pi_controller = PIController(self, 2, 0.01, 1)
         self.throttle_percent = 0
 
         # Throttle Interface Values
@@ -37,13 +37,13 @@ class Kiln:
 
         # Misc Values
         self.start_time = datetime.now()
+        self.file_write_interval = 0
 
         # Curses for screen writing
         self.stdscr = curses.initscr()
         curses.curs_set(False)
         self.stdscr.clear()
         self.stdscr.refresh()
-
 
         # Start the threads
         self.max_controller.start_spi_thread()
@@ -68,28 +68,34 @@ class Kiln:
         self.throttle_interface.set_throttle(throttle_percent)
 
     def run(self):
-        while True:
-            text = "==========================================================\n"
-            text += "Kiln Controller\n\n"
-            text += "Elapsed Runtime: " + str(datetime.now() - self.start_time) + "\n"
-            text += "Ambient Temperature: " + str(round(self.cold_junc_temp_f, 1)) + "F\n\n"
-            text += self.scheduler.get_schedule_stats()
-            text += "\nThermocouple Temperature: " + str(round(self.thermocouple_temp_f, 1)) + "F\n"
-            text += "Target Temperature: " + str(round(self.setpoint_f, 1)) + "F\n"
-            text += "Error: " + str(round(self.pi_controller.error, 1)) + "F\n"
-            text += "Throttle: " + str(round(self.throttle_percent, 1)) + "%\n\n"
-            text += self.pi_controller.get_values(2) + "\n"
-            text += "==========================================================\n"
-            self.stdscr.erase()
-            self.stdscr.addstr(0, 0, text)
-            self.stdscr.refresh()
-            time.sleep(1)
+        with open("kiln.csv", 'w') as file:
+            writer = csv.writer(file)
+            while True:
+                text = "==========================================================\n"
+                text += "Kiln Controller\n\n"
+                text += "Elapsed Runtime: " + str(datetime.now() - self.start_time).split('.')[0] + "\n"
+                text += "Ambient Temperature: " + str(round(self.cold_junc_temp_f, 1)) + "F\n\n"
+                text += self.scheduler.get_schedule_stats()
+                text += "\nThermocouple Temperature: " + str(round(self.thermocouple_temp_f, 1)) + "F\n"
+                text += "Target Temperature: " + str(round(self.setpoint_f, 1)) + "F\n"
+                text += "Error: " + str(round(self.pi_controller.error, 1)) + "F\n"
+                text += "Throttle: " + str(round(self.throttle_percent, 1)) + "%\n\n"
+                text += self.pi_controller.get_values(2) + "\n"
+                text += "==========================================================\n"
+                self.stdscr.erase()
+                self.stdscr.addstr(0, 0, text)
+                self.stdscr.refresh()
+                if self.file_write_interval == 10:
+                    self.file_write_interval = 0
+                    writer.writerow(
+                        ["Temp", round(self.thermocouple_temp_f, 1), "Tgt", round(self.setpoint_f, 1), "Tht",
+                         round(self.throttle_percent, 1), "P", round(self.pi_controller.p_value, 1), "I",
+                         round(self.pi_controller.i_value, 1)])
+                else:
+                    self.file_write_interval += 1
+                time.sleep(1)
 
 
 if __name__ == "__main__":
     kiln = Kiln()
     kiln.run()
-
-
-
-
