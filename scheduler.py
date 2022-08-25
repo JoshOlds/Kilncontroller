@@ -1,5 +1,6 @@
 import threading
 import time
+import math
 from datetime import datetime
 from enum import Enum
 
@@ -30,7 +31,7 @@ class ScheduleHold:
     def get_stats(self):
         text = "HOLD Step\n"
         text += "HOLD at: " + str(self.hold_temp_f) + "F\n"
-        text += "Remaining Minutes: " + str(self.remaining_minutes) + "\n"
+        text += "Remaining Minutes: " + str(math.ceil(self.remaining_minutes)) + "\n"
         return text
 
 
