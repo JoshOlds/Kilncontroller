@@ -22,8 +22,8 @@ class Kiln:
         # Scheduler Values
         self.scheduler = Scheduler(self)
         self.setpoint_f = 0
-        self.scheduler.schedule.append(ScheduleRamp(100, 150))
-        self.scheduler.schedule.append(ScheduleHold(150, 120))
+        self.scheduler.schedule.append(ScheduleRamp(100, 200))
+        self.scheduler.schedule.append(ScheduleHold(200, 120))
         self.scheduler.schedule.append(ScheduleRamp(200, 550))
         self.scheduler.schedule.append(ScheduleRamp(300, 1150))
         self.scheduler.schedule.append(ScheduleRamp(400, 1950))
