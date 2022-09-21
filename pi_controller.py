@@ -35,6 +35,11 @@ class PIController:
             self.error = self.kiln.setpoint_f - self.kiln.thermocouple_temp_f
             self.p_value = self.error * self._p
             self.i_value += self.error * self._i
+            # Clamp integrator at -100 & 100 (no sense in winding up above max throttle)
+            if self.i_value < -100:
+                self.i_value = -100
+            if self.i_value > 100:
+                self.i_value = 100
             throttle = self.p_value + self.i_value
             throttle = int(round(throttle, 0))
             self.kiln.set_throttle(throttle)
