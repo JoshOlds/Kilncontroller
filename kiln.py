@@ -22,8 +22,17 @@ class Kiln:
         # Scheduler Values
         self.scheduler = Scheduler(self)
         self.setpoint_f = 0
-        self.scheduler.schedule.append(ScheduleRamp(100, 200))
+
+        # Warmup ramp
+        self.scheduler.schedule.append(ScheduleRamp(100, 100))
+
+        # Fast ramp to 200
+        self.scheduler.schedule.append(ScheduleRamp(300, 200))
+
+        # Hold at 200 for 2 hours
         self.scheduler.schedule.append(ScheduleHold(200, 120))
+
+        # 3 Stage ramp to 1950 End Temp
         self.scheduler.schedule.append(ScheduleRamp(200, 550))
         self.scheduler.schedule.append(ScheduleRamp(300, 1150))
         self.scheduler.schedule.append(ScheduleRamp(400, 1950))
