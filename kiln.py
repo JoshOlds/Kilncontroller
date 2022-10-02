@@ -6,6 +6,7 @@ from max31856_driver import max_controller
 from scheduler import Scheduler, ScheduleRamp, ScheduleHold
 from pi_controller import PIController
 from throttle_interface import ThrottleInterface
+from monitor import Monitor
 
 
 class Kiln:
@@ -44,9 +45,14 @@ class Kiln:
         # Throttle Interface Values
         self.throttle_interface = ThrottleInterface(36)
 
+        # Monitor
+        self.monitor = Monitor(self, 300, 50, 120)
+
         # Misc Values
         self.start_time = datetime.now()
         self.file_write_interval = 0
+        self.highest_achieved_temp = 0
+        self.is_shutdown = False
 
         # Curses for screen writing
         self.stdscr = curses.initscr()
@@ -59,10 +65,13 @@ class Kiln:
         self.scheduler.start_scheduler_thread()
         self.pi_controller.start_pi_thread()
         self.throttle_interface.start_throttle_thread()
+        self.monitor.start_monitor_thread()
 
     def set_thermocouple_temp_c(self, temp_c):
         self.thermocouple_temp_c = temp_c
         self.thermocouple_temp_f = (temp_c * 1.8) + 32
+        if self.thermocouple_temp_f > self.highest_achieved_temp:
+            self.highest_achieved_temp = self.thermocouple_temp_f
 
     def set_cold_junc_temp_c(self, temp_c):
         self.cold_junc_temp_c = temp_c
@@ -76,19 +85,30 @@ class Kiln:
         self.throttle_percent = throttle_percent
         self.throttle_interface.set_throttle(throttle_percent)
 
+    def shutdown(self):
+        self.throttle_interface.shutdown()
+        self.pi_controller.shutdown()
+        self.scheduler.shutdown()
+        self.is_shutdown = True
+
     def run(self):
         with open("kiln.csv", 'w') as file:
             writer = csv.writer(file)
             while True:
                 text = "==========================================================\n"
                 text += "Kiln Controller\n\n"
+                text += "State: " + ("RUNNING\n" if not self.is_shutdown else "SHUTDOWN\n")
                 text += "Elapsed Runtime: " + str(datetime.now() - self.start_time).split('.')[0] + "\n"
+                text += "Highest Achieved Temp: " + str(round(self.highest_achieved_temp, 1)) + "F\n"
                 text += "Ambient Temperature: " + str(round(self.cold_junc_temp_f, 1)) + "F\n\n"
                 text += self.scheduler.get_schedule_stats()
                 text += "\nThermocouple Temperature: " + str(round(self.thermocouple_temp_f, 1)) + "F\n"
                 text += "Target Temperature: " + str(round(self.setpoint_f, 1)) + "F\n"
                 text += "Error: " + str(round(self.pi_controller.error, 1)) + "F\n"
                 text += "Throttle: " + str(round(self.throttle_percent, 1)) + "%\n\n"
+                text += "Monitor - Is Temp Error Exceeded? : " + \
+                        ("YES ERROR EXCEEDED" if self.monitor.is_in_error_state() else "NO")
+                text += "\n\n"
                 text += self.pi_controller.get_values(2) + "\n"
                 text += "==========================================================\n"
                 self.stdscr.erase()

@@ -18,7 +18,7 @@ class PIController:
         self.pi_thread_running = False
 
     def start_pi_thread(self):
-        if not self._pi_thread_flag:
+        if not self.pi_thread_running:
             # print("Starting PI Controller Thread...")
             self._pi_thread_flag = True
             self.pi_thread = threading.Thread(group=None, target=self._run, name="pi_controller_thread")
@@ -44,6 +44,21 @@ class PIController:
             throttle = int(round(throttle, 0))
             self.kiln.set_throttle(throttle)
             time.sleep(1.0 / self._hz)
+
+        self.kiln.set_throttle(0)
+        self.pi_thread_running = False
+
+    def stop_pi_thread(self):
+        self._pi_thread_flag = False
+        # wait for thread to shutdown
+        while self.pi_thread_running:
+            time.sleep(0.1)
+
+    def shutdown(self):
+        self.stop_pi_thread()
+        self.error = 0
+        self.p_value = 0
+        self.i_value = 0
 
     def get_values(self, rounding_digits):
         text = "P: " + str(round(self.p_value, rounding_digits)) + ", I: " + str(round(self.i_value, rounding_digits))

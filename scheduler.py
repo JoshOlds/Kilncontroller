@@ -61,7 +61,7 @@ class Scheduler:
         return self._setpoint_f
 
     def start_scheduler_thread(self):
-        if not self._schedule_thread_flag:
+        if not self.schedule_thread_running:
             # print("Scheduler: Starting Scheduler Thread...")
             self._schedule_thread_flag = True
             self.schedule_thread = threading.Thread(group=None, target=self._run, name="scheduler_thread")
@@ -82,6 +82,7 @@ class Scheduler:
                 self.set_setpoint(0)
                 self._schedule_thread_flag = False
                 self.schedule_thread_running = False
+                self.kiln.shutdown()
                 return
 
             step = self.schedule[self._schedule_index]
@@ -91,6 +92,8 @@ class Scheduler:
                 self._ramp_loop(step)
             if isinstance(step, ScheduleHold):
                 self._hold_loop(step)
+
+        self.schedule_thread_running = False
 
     def _hold_loop(self, hold: ScheduleHold):
         self._setpoint_f = hold.hold_temp_f
@@ -128,3 +131,15 @@ class Scheduler:
             self.set_setpoint(setpoint)
 
             time.sleep(1)
+
+    def stop_schedule_thread(self):
+        self._schedule_thread_flag = False
+        # wait for thread to shutdown
+        while self.schedule_thread_running:
+            time.sleep(0.1)
+
+    def shutdown(self):
+        self.stop_schedule_thread()
+        self.set_setpoint(0)
+
+

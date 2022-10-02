@@ -21,7 +21,7 @@ class ThrottleInterface:
         self.throttle_thread_running = False
 
     def start_throttle_thread(self):
-        if not self._throttle_thread_flag:
+        if not self.throttle_thread_running:
             # print("Starting Throttle Thread...")
             self._throttle_thread_flag = True
             self.throttle_thread = threading.Thread(group=None, target=self._run, name="throttle_interface_thread")
@@ -58,6 +58,7 @@ class ThrottleInterface:
                 # Sleep for the remainder of the time period
                 time.sleep(0.1 * (100 - throttle))
 
+        self.set_throttle(0)
         GPIO.output(self.relay_pin, GPIO.LOW)
         # print("Throttle Off")
         self.throttle_thread_running = False
@@ -81,4 +82,10 @@ class ThrottleInterface:
 
     def cleanup(self):
         GPIO.cleanup()
+
+    def shutdown(self):
+        self.stop_throttle_thread()
+        GPIO.output(self.relay_pin, GPIO.LOW)
+        self.cleanup()
+
 

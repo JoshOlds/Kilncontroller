@@ -33,7 +33,7 @@ class MAXController:
         self.fault_callback = None
 
     def start_spi_thread(self):
-        if not self._spi_thread_flag:
+        if not self.spi_thread_running:
             # print("Starting SPI Thread...")
             self._spi_thread_flag = True
             self.spi_thread = threading.Thread(group=None, target=self._run, name="max31856_spi_thread")
