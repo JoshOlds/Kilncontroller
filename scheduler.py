@@ -96,7 +96,7 @@ class Scheduler:
         self.schedule_thread_running = False
 
     def _hold_loop(self, hold: ScheduleHold):
-        self._setpoint_f = hold.hold_temp_f
+        self.set_setpoint(hold.hold_temp_f)
         hold.start_time = datetime.now()
 
         while self._schedule_thread_flag:
